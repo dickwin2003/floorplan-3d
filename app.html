@@ -105,6 +105,7 @@
             <input type="checkbox" id="cfgProxy">
             <span>经本地代理转发（浏览器直连遇到 CORS 跨域拦截时勾选，并运行 <code>node server.js</code>，访问 http://localhost:8000）</span>
           </div>
+          <div id="serverKeyNote" class="checkline hide" style="color:#3e7d3e"></div>
         </details>
       </div>
       <div class="actions">
@@ -164,6 +165,22 @@ function saveCfg(){
   try{ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }catch{}
 }
 for(const id of ['cfgBase','cfgModel','cfgKey','cfgProxy']) $('#'+id).addEventListener('change', saveCfg);
+
+/* ---------- 服务端 .env Key 检测：node server.js 配了 LLM_API_KEY 时浏览器零配置 ---------- */
+let serverEnv = null;
+try{
+  const r = await fetch('/api/env', {cache:'no-store'});
+  if(r.ok) serverEnv = await r.json();
+}catch{} // 静态托管 / 直接双击打开时无此接口，走浏览器 Key 模式
+if(serverEnv?.serverKey){
+  $('#serverKeyNote').innerHTML = `✅ 检测到服务端 .env 已配置 Key（模型 <b>${serverEnv.model}</b> @ ${hostOf(serverEnv.baseUrl)}），本页无需填写，直接上传生成`;
+  $('#serverKeyNote').classList.remove('hide');
+  for(const id of ['cfgBase','cfgModel','cfgKey','cfgProxy']) $('#'+id).disabled = true;
+  document.querySelector('#cfgKey').closest('label').style.opacity = .45;
+  log(`🔑 Key 模式：服务端 .env（${serverEnv.model}），浏览器零配置`, 'ok');
+}else if(serverEnv){
+  log('ℹ️ 服务端未配置 .env Key（可参考 .env.example 创建后重启 node server.js），也可在本页填写', 'dim');
+}
 
 /* ---------- 上传交互 ---------- */
 const drop = $('#drop'), file = $('#file');
@@ -249,14 +266,16 @@ $('#btnDemo').onclick = () => {
 async function run(){
   if(!imgData) return;
   saveCfg();
-  if(!cfg.key){
+  if(!cfg.key && !serverEnv?.serverKey){
     log('⚠️ 未配置 API Key，无法开始', 'warn');
-    return showErr('请先在下方展开「AI 接口配置」填写 API Key（或点「先看示例方案」体验）');
+    return showErr('请先在下方展开「AI 接口配置」填写 API Key，或在服务器目录创建 .env（参考 .env.example）。也可以点「先看示例方案」体验');
   }
   $('#btnGo').disabled = true; showErr('');
   const st = $('#status');
   const t0 = Date.now();
-  log(`🧭 目标接口 ${hostOf(cfg.base)} · 模型 ${cfg.model} · ${cfg.proxy ? '经本地代理转发' : '浏览器直连'}`);
+  log(serverEnv?.serverKey
+    ? `🧭 经服务端 /api/chat 转发（.env 注入 Key） · 模型 ${serverEnv.model}`
+    : `🧭 目标接口 ${hostOf(cfg.base)} · 模型 ${cfg.model} · ${cfg.proxy ? '经本地代理转发' : '浏览器直连'}`);
   log(`🚀 发送解析请求：图片 ${KB(imgData.dataURL.length)} + 提示词 ${KB(PROMPT.length)}，等待响应（约 10~60 秒）…`);
   let lastTick = t0;
   const timer = setInterval(() => {
@@ -301,20 +320,23 @@ async function run(){
   }
 }
 async function callLLM(prompt, image = null){
-  const endpoint = cfg.base.replace(/\/+$/,'') + '/chat/completions';
   const content = image
     ? [{type:'image_url', image_url:{url: image}}, {type:'text', text: prompt}]
     : prompt;
-  const body = {
-    model: cfg.model,
-    messages: [{role:'user', content}],
-    temperature: .1,
-    max_tokens: 8000,
-  };
-  const headers = {'Content-Type':'application/json', 'Authorization':'Bearer ' + cfg.key};
-  const resp = cfg.proxy
-    ? fetch('/api/proxy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url: endpoint, headers, body})})
-    : fetch(endpoint, {method:'POST', headers, body: JSON.stringify(body)});
+  const messages = [{role:'user', content}];
+  const payload = {temperature: .1, max_tokens: 8000};
+  let resp;
+  if(serverEnv?.serverKey){
+    // 服务端 Key 模式：.env 注入，浏览器不发 Key
+    resp = fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({messages, ...payload})});
+  }else{
+    const endpoint = cfg.base.replace(/\/+$/,'') + '/chat/completions';
+    const body = {model: cfg.model, messages, ...payload};
+    const headers = {'Content-Type':'application/json', 'Authorization':'Bearer ' + cfg.key};
+    resp = cfg.proxy
+      ? fetch('/api/proxy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url: endpoint, headers, body})})
+      : fetch(endpoint, {method:'POST', headers, body: JSON.stringify(body)});
+  }
   const t0 = Date.now();
   const r = await Promise.race([resp, new Promise((_,rej) => setTimeout(() => rej(new Error('请求超时（120 秒）')), 120000))]);
   log(`📨 HTTP ${r.status} ${r.statusText || ''} · 耗时 ${((Date.now()-t0)/1000).toFixed(1)}s`, r.ok ? 'dim' : 'err');
