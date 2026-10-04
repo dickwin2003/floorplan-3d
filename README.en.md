@@ -2,6 +2,8 @@
 
 [中文](README.md) | English
 
+📘 **[Usage Guide (AI generator — upload a plan, get 2D/3D)](使用说明.md)** (Chinese)
+
 A pure front-end tool for interior design on a floor plan: place furniture, remove or modify walls, and take measurements on a 2D plan, then switch to a Three.js 3D scene with one click — view it from above or walk through it in first person. The whole app is a single `index.html`: no build step, just open it.
 
 ## Features
