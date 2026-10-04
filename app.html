@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>户型图 AI 生成器 · 上传设计图出 2D / 3D</title>
+<style>
+  :root{--ink:#33322e;--paper:#f5f1e8;--accent:#8a6d3b;--line:#d8d0c1;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#e9e4d8;color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--paper);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:17px;font-weight:600}
+  header .sub{font-size:12px;color:#8f887a}
+  header .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .btn{padding:7px 14px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink);text-decoration:none}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .tab{padding:7px 18px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-size:14px}
+  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  label.tog{font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer}
+  main{flex:1;position:relative;min-height:0}
+  .hide{display:none!important}
+  /* 上传视图 */
+  #uploadView{position:absolute;inset:0;overflow:auto;padding:4vh 16px;display:flex;flex-direction:column;align-items:center}
+  #uploadView .inner{max-width:860px;width:100%}
+  #uploadView h2{font-size:26px;margin-bottom:8px}
+  #uploadView .desc{color:#8f887a;font-size:14px;margin-bottom:22px}
+  #drop{border:2px dashed #c4b99f;background:#f5f1e8;border-radius:16px;padding:44px 20px;text-align:center;cursor:pointer;transition:.15s}
+  #drop.over{border-color:var(--accent);background:#efe8d8}
+  #drop .big{font-size:17px;margin-bottom:6px}
+  #drop .small{font-size:12px;color:#8f887a}
+  #drop img{max-height:300px;max-width:100%;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.15)}
+  .panel{background:#f5f1e8;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:16px;font-size:13px}
+  .panel summary{cursor:pointer;color:#6e675a}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin-top:10px}
+  .grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#6e675a}
+  .grid input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:#fff;color:var(--ink)}
+  .checkline{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:#6e675a}
+  .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;align-items:center}
+  #status{margin-top:14px;font-size:13px;color:#6e675a;min-height:20px}
+  #err{margin-top:10px;font-size:13px;color:#a4442e;background:#f7e6e0;border:1px solid #e3c1b5;border-radius:10px;padding:10px 14px}
+  /* 结果视图 */
+  #c2d,#c3d{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+  #c2d{cursor:grab}
+  #hint{position:absolute;left:14px;bottom:14px;font-size:12px;color:#8f887a;background:rgba(245,241,232,.9);padding:6px 12px;border-radius:8px;border:1px solid var(--line)}
+  #toast{position:absolute;left:50%;top:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none}
+  /* 过程日志面板 */
+  #logWrap{position:fixed;left:14px;bottom:14px;z-index:60;width:min(580px,94vw);background:#221f1a;border:1px solid #3c382f;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.35);overflow:hidden}
+  #logHead{display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12px;color:#cfc8b8;background:#2c2922}
+  #logHead button{background:transparent;border:1px solid #4a443a;color:#a89f8c;border-radius:6px;font-size:11px;padding:2px 9px;cursor:pointer}
+  #logHead button:hover{color:#e8e2d2;border-color:#6b6353}
+  #logClear{margin-left:auto}
+  #logBox{max-height:34vh;overflow:auto;padding:8px 12px;font:11px/1.75 Consolas,'Courier New',monospace;color:#cfc8b8;white-space:pre-wrap;word-break:break-all}
+  #logBox .ln.ok{color:#9ec97f}
+  #logBox .ln.warn{color:#e2b361}
+  #logBox .ln.err{color:#e28a76}
+  #logBox .ln.dim{color:#847d6d}
+  details.jsonbox{position:absolute;right:14px;bottom:14px;max-width:520px;max-height:46vh;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:11px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
+  details.jsonbox pre{overflow:auto;max-height:34vh;margin-top:8px}
+</style>
+<script type="importmap">
+{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}
+</script>
+</head>
+<body>
+<header>
+  <h1>户型图 AI 生成器</h1>
+  <span class="sub">上传平面设计图 → 自动生成 2D 图纸 + 3D 动态场景 · 单位 mm</span>
+  <div class="right">
+    <div class="tabs hide" id="tabs">
+      <button class="tab on" id="tab2d">2D 设计图</button>
+      <button class="tab" id="tab3d">3D 动态</button>
+    </div>
+    <label class="tog hide" id="rotWrap"><input type="checkbox" id="autorot" checked>自动旋转</label>
+    <button class="btn hide" id="btnJson">方案 JSON</button>
+    <button class="btn hide" id="btnPng">导出 PNG</button>
+    <button class="btn hide" id="btnNew">重新上传</button>
+    <button class="btn" id="btnLog">📜 过程日志</button>
+    <a class="btn" href="design.html">示例方案 →</a>
+  </div>
+</header>
+<main>
+  <!-- 上传视图 -->
+  <div id="uploadView">
+    <div class="inner">
+      <h2>上传户型 / 平面设计图</h2>
+      <div class="desc">支持 JPG / PNG，CAD 导出图、手绘图、方案图均可。AI 解析为墙体 / 门窗 / 房间 / 家具数据，自动渲染 2D 图纸与可漫游的 3D 场景。</div>
+      <div id="drop">
+        <div id="dropHint"><div class="big">点击选择 / 拖拽图片到这里 / Ctrl+V 粘贴</div><div class="small">图片仅发送给你自己配置的 AI 接口，本站不做任何上传</div></div>
+      </div>
+      <input type="file" id="file" accept="image/*" class="hide">
+      <div class="panel">
+        <details>
+          <summary>AI 接口配置（需一个视觉大模型 API Key，保存在本机浏览器）</summary>
+          <div class="grid">
+            <label>接口地址（OpenAI 兼容 /chat/completions）
+              <input id="cfgBase" placeholder="https://open.bigmodel.cn/api/paas/v4"></label>
+            <label>模型（须支持图片输入）
+              <input id="cfgModel" placeholder="glm-4.5v"></label>
+            <label style="grid-column:1/-1">API Key
+              <input id="cfgKey" type="password" placeholder="粘贴你的 Key，仅存本机 localStorage"></label>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="cfgProxy">
+            <span>经本地代理转发（浏览器直连遇到 CORS 跨域拦截时勾选，并运行 <code>node server.js</code>，访问 http://localhost:8000）</span>
+          </div>
+        </details>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="btnGo" disabled>开始生成 2D / 3D</button>
+        <button class="btn" id="btnDemo">没有 Key？先看示例方案</button>
+        <span id="status"></span>
+      </div>
+      <div id="err" class="hide"></div>
+    </div>
+  </div>
+  <!-- 结果视图 -->
+  <canvas id="c2d" class="hide"></canvas>
+  <canvas id="c3d" class="hide"></canvas>
+  <div id="hint" class="hide">滚轮缩放 · 拖动平移 · 双击复位</div>
+  <details class="jsonbox hide" id="jsonBox"><summary>AI 解析数据（可下载 / 手改后导入）</summary><pre id="jsonPre"></pre></details>
+  <div id="logWrap" class="hide">
+    <div id="logHead"><span>📋 过程日志</span><button id="logClear">清空</button><button id="logHide">收起</button></div>
+    <div id="logBox"></div>
+  </div>
+  <div id="toast"></div>
+</main>
+
+<script type="module">
+import {Plan2D, Plan3D, normalizePlan} from './plan-render.js';
+import {PLAN_DEMO} from './demo-plan.js';
+
+const $ = s => document.querySelector(s);
+const toast = msg => { const t = $('#toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(t._h); t._h = setTimeout(()=>t.style.opacity=0, 2400); };
+const showErr = (html) => { const e = $('#err'); if(!html){ e.classList.add('hide'); return; } e.innerHTML = html; e.classList.remove('hide'); };
+
+/* ---------- 过程日志 ---------- */
+const logBox = $('#logBox');
+const KB = n => n >= 1048576 ? (n/1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n/1024)) + 'KB';
+function log(msg, cls = ''){
+  $('#logWrap').classList.remove('hide');
+  const el = document.createElement('div');
+  el.className = 'ln' + (cls ? ' ' + cls : '');
+  el.textContent = `[${new Date().toTimeString().slice(0,8)}] ${msg}`;
+  logBox.appendChild(el);
+  logBox.scrollTop = logBox.scrollHeight;
+}
+$('#logHide').onclick = () => $('#logWrap').classList.add('hide');
+$('#logClear').onclick = () => logBox.innerHTML = '';
+$('#btnLog').onclick = () => $('#logWrap').classList.toggle('hide');
+const hostOf = u => { try{ return new URL(u).host; }catch{ return u; } };
+
+/* ---------- 配置（localStorage） ---------- */
+const CFG_KEY = 'fp3d-api-cfg';
+const cfg = Object.assign({base:'https://open.bigmodel.cn/api/paas/v4', model:'glm-4.5v', key:'', proxy:false},
+  (()=>{ try{ return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; }catch{ return {}; } })());
+$('#cfgBase').value = cfg.base; $('#cfgModel').value = cfg.model; $('#cfgKey').value = cfg.key; $('#cfgProxy').checked = cfg.proxy;
+function saveCfg(){
+  cfg.base = $('#cfgBase').value.trim() || cfg.base;
+  cfg.model = $('#cfgModel').value.trim() || cfg.model;
+  cfg.key = $('#cfgKey').value.trim();
+  cfg.proxy = $('#cfgProxy').checked;
+  try{ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }catch{}
+}
+for(const id of ['cfgBase','cfgModel','cfgKey','cfgProxy']) $('#'+id).addEventListener('change', saveCfg);
+
+/* ---------- 上传交互 ---------- */
+const drop = $('#drop'), file = $('#file');
+let imgData = null;   // {dataURL(压缩后), name}
+drop.onclick = () => file.click();
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  const f = e.dataTransfer.files?.[0]; if(f) loadImage(f);
+});
+file.onchange = () => { if(file.files[0]) loadImage(file.files[0]); };
+addEventListener('paste', e => {
+  const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+  if(it) loadImage(it.getAsFile());
+});
+function loadImage(f){
+  if(!f.type.startsWith('image/')) return showErr('请选择图片文件（JPG / PNG）');
+  showErr('');
+  const rd = new FileReader();
+  rd.onload = () => {
+    // 压缩到最长边 1600，控制请求体积
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1600/Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width*k); cv.height = Math.round(img.height*k);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      imgData = {dataURL: cv.toDataURL('image/jpeg', .92), name: f.name || '粘贴的图片'};
+      drop.innerHTML = ''; drop.appendChild(Object.assign(document.createElement('img'), {src: imgData.dataURL}));
+      $('#btnGo').disabled = false;
+      log(`📷 载入图片「${imgData.name}」：原始 ${img.width}×${img.height}、${KB(f.size)} → 压缩至 ${cv.width}×${cv.height}，请求体积 ${KB(imgData.dataURL.length)}`);
+      $('#status').textContent = `已就绪：${imgData.name}（${img.width}×${img.height}）`;
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(f);
+}
+
+/* ---------- AI 解析 ---------- */
+const PROMPT = `你是建筑设计图解析引擎。输入是一张户型/室内平面设计图，把它解析为严格 JSON（单位 mm，整数）。
+
+【输出纪律】只输出一个 JSON 对象。禁止 markdown 代码块、禁止 // 或 /* */ 注释（下面 schema 中的注释仅为字段说明，不得出现在你的输出里）、禁止尾随逗号、禁止解释文字。
+
+坐标约定：原点在图纸左上角外墙外皮，x 向右、y 向下。外墙厚一般 240、内墙 120，按图中标注比例估计；无标注时按常规家具/门尺寸推算比例。
+
+输出 schema：
+{
+ "title": "图名（图纸标题，没有则起名）",
+ "outer": {"w":总宽,"h":总高},
+ "walls": [[x0,y0,x1,y1]...],
+ "windows": [[x0,y0,x1,y1]...],
+ "doors": [{"gap":[x0,y0,x1,y1],"h":[铰点x,铰点y],"dir":[开启方向dx,dy],"len":门扇宽,"double":false}...],
+ "openings": [[x0,y0,x1,y1]...],
+ "rooms": [{"name":"房间名","x0":..,"y0":..,"x1":..,"y1":..,"floor":"marble|wood|carpet|tile"}...],
+ "furniture": [{"t":"类型","n":"名称","x":中心x,"y":中心y,"w":宽,"d":深,"rot":0,"c":"#可选16进制颜色"}...]
+}
+
+规则：
+0. 【墙体最重要】先输出外墙四边（一整圈闭合），再输出内墙把相邻房间隔开；walls 至少 4 段。输出前自检：除门窗洞口外，每个房间四周都有墙段包围，墙网连续无缝隙。
+1. walls 每段为矩形；门洞和通道处墙断开；窗洞处墙保持连续（窗只出现在 windows，墙体穿过窗洞）。
+2. t 只能取：sofa cornersofa armchair chair roundtable table coffeetable sidetable bed nightstand wardrobe desk bookshelf counter ksink stove fridge toilet vanity shower bathtub washer tv tvstand shoecab plant rug
+3. rot：0=朝南(下) 90=朝西 180=朝北(上) 270=朝东；贴墙家具背面朝墙。圆桌椅子和床、洁具都要按图中布置还原。
+4. 房间矩形不重叠，共同铺满室内功能区；墙必须闭合围合。
+5. 所有数值取整到 10mm。
+
+示例（截选）：
+{"title":"示例","outer":{"w":8000,"h":5000},
+ "walls":[[0,0,8000,240],[0,240,240,5000],[7760,240,8000,5000],[0,4760,3240,5000],[4240,4760,8000,5000],[3240,3940,7760,4180]],
+ "windows":[[1200,0,3200,240],[0,1200,240,3200]],
+ "doors":[{"gap":[3240,4760,4240,5000],"h":[4240,5000],"dir":[0,-1],"len":1000}],
+ "openings":[[3240,3940,4240,4180]],
+ "rooms":[{"name":"客厅","x0":240,"y0":240,"x1":7760,"y1":3940,"floor":"tile"},{"name":"卧室","x0":240,"y0":4180,"x1":7760,"y1":4760,"floor":"wood"}],
+ "furniture":[{"t":"sofa","n":"三人沙发","x":2000,"y":3400,"w":2400,"d":900,"rot":180,"c":"#b7c4b0"},{"t":"roundtable","n":"圆桌","x":4000,"y":1800,"w":1600,"d":1600},{"t":"bed","n":"双人床","x":1500,"y":4470,"w":1800,"d":2000,"rot":0,"c":"#c9d6df"}]}`;
+
+$('#btnGo').onclick = run;
+$('#btnDemo').onclick = () => {
+  log('📦 载入内置示例方案（doc/1.jpg 的解析结果），无需 AI');
+  render(normalizePlan(PLAN_DEMO));
+  log('✅ 示例 2D 图纸完成', 'ok');
+  toast('已载入示例方案');
+};
+async function run(){
+  if(!imgData) return;
+  saveCfg();
+  if(!cfg.key){
+    log('⚠️ 未配置 API Key，无法开始', 'warn');
+    return showErr('请先在下方展开「AI 接口配置」填写 API Key（或点「先看示例方案」体验）');
+  }
+  $('#btnGo').disabled = true; showErr('');
+  const st = $('#status');
+  const t0 = Date.now();
+  log(`🧭 目标接口 ${hostOf(cfg.base)} · 模型 ${cfg.model} · ${cfg.proxy ? '经本地代理转发' : '浏览器直连'}`);
+  log(`🚀 发送解析请求：图片 ${KB(imgData.dataURL.length)} + 提示词 ${KB(PROMPT.length)}，等待响应（约 10~60 秒）…`);
+  let lastTick = t0;
+  const timer = setInterval(() => {
+    const s = Math.round((Date.now()-t0)/1000);
+    st.textContent = `AI 解析中… ${s}s（约需 10~60 秒）`;
+    if(Date.now() - lastTick > 10000){ lastTick = Date.now(); log(`⏳ 仍在解析… 已等待 ${s}s`, 'dim'); }
+  }, 500);
+  try{
+    const text = await callLLM(PROMPT, imgData.dataURL);
+    clearInterval(timer);
+    log(`🧩 收到输出 ${text.length} 字符，开始提取 JSON…`);
+    let plan = parsePlanJSON(text, m => log(m === '全部失败' ? '⚠️ 标准/宽松解析均失败' : `✅ JSON 解析成功（${m}）`, m === '全部失败' ? 'warn' : 'ok'));
+    if(!plan){
+      log('🔁 本地修复无效，调用 AI 修复 JSON（第二次请求）…', 'warn');
+      st.textContent = 'AI 修复 JSON 中…';
+      const fixed = await callLLM('下面文本应为描述户型的 JSON，但可能含有注释、尾随逗号或被截断。请修复并只输出一个合法 JSON 对象，不要任何解释：\n' + text.slice(0, 24000));
+      plan = parsePlanJSON(fixed, m => log(m === '全部失败' ? '⚠️ AI 修复后仍无法解析' : `✅ AI 修复成功（${m}）`, m === '全部失败' ? 'warn' : 'ok'));
+    }
+    if(!plan) throw new Error('AI 输出的 JSON 无法解析，请再点一次「开始生成」重试');
+    const rawWalls = Array.isArray(plan.walls) ? plan.walls.length : 0;
+    const n = normalizePlan(plan);
+    if(n.walls.length < 4 && n.rooms.length) log('⚠️ 方案缺墙且无房间可推算，3D 会没有墙体', 'warn');
+    else if(n.walls.length > rawWalls) log(`🧱 AI 漏了墙体，已按房间自动生成墙网（${n.walls.length} 段）`, 'warn');
+    log(`📐 方案数据：包络 ${n.outer.w}×${n.outer.h}mm · 墙 ${n.walls.length} 段 · 窗 ${n.windows.length} · 门 ${n.doors.length} · 洞口 ${n.openings.length} · 房间 ${n.rooms.length} · 家具 ${n.furniture.length} 件`);
+    st.textContent = '解析完成，渲染中…';
+    log('🖼 渲染 2D 图纸…');
+    render(n);
+    log('✅ 2D 图纸完成（切「3D 动态」标签时初始化三维场景）', 'ok');
+    log(`🎉 全部完成，总用时 ${((Date.now()-t0)/1000).toFixed(1)}s`, 'ok');
+    toast('生成完成');
+  }catch(err){
+    clearInterval(timer); st.textContent = '';
+    log('❌ ' + err.message, 'err');
+    const cors = err instanceof TypeError;
+    showErr('生成失败：' + err.message +
+      (cors ? '<br>若是浏览器跨域(CORS)拦截：勾选上方「经本地代理转发」，然后运行 <code>node server.js</code> 并从 http://localhost:8000/app.html 访问。' : '') +
+      '<br>也可以先点「先看示例方案」查看效果。');
+    console.error(err);
+  }finally{
+    $('#btnGo').disabled = false;
+  }
+}
+async function callLLM(prompt, image = null){
+  const endpoint = cfg.base.replace(/\/+$/,'') + '/chat/completions';
+  const content = image
+    ? [{type:'image_url', image_url:{url: image}}, {type:'text', text: prompt}]
+    : prompt;
+  const body = {
+    model: cfg.model,
+    messages: [{role:'user', content}],
+    temperature: .1,
+    max_tokens: 8000,
+  };
+  const headers = {'Content-Type':'application/json', 'Authorization':'Bearer ' + cfg.key};
+  const resp = cfg.proxy
+    ? fetch('/api/proxy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url: endpoint, headers, body})})
+    : fetch(endpoint, {method:'POST', headers, body: JSON.stringify(body)});
+  const t0 = Date.now();
+  const r = await Promise.race([resp, new Promise((_,rej) => setTimeout(() => rej(new Error('请求超时（120 秒）')), 120000))]);
+  log(`📨 HTTP ${r.status} ${r.statusText || ''} · 耗时 ${((Date.now()-t0)/1000).toFixed(1)}s`, r.ok ? 'dim' : 'err');
+  if(!r.ok){
+    let detail = ''; try{ detail = (await r.text()).slice(0, 300); }catch{}
+    throw new Error(`接口返回 ${r.status} ${r.statusText} ${detail}`);
+  }
+  const j = await r.json();
+  const choice = j.choices?.[0];
+  const text = choice?.message?.content;
+  if(!text){
+    log('❌ 接口未返回内容：' + JSON.stringify(j).slice(0, 150), 'err');
+    throw new Error('接口未返回内容：' + JSON.stringify(j).slice(0, 200));
+  }
+  if(choice.finish_reason) log(`   模型输出 ${typeof text === 'string' ? text.length : '-'} 字符 · finish=${choice.finish_reason} · tokens ${j.usage?.total_tokens ?? '?'}`, 'dim');
+  return typeof text === 'string' ? text : text.map(p => p.text||'').join('');
+}
+/* ---------- JSON 宽松解析（应对 LLM 输出的注释 / 尾逗号 / 截断） ---------- */
+function parsePlanJSON(text, trace){
+  const hit = n => { if(trace) trace(n); };
+  let t = String(text).trim().replace(/^```(json)?/i, '').replace(/```\s*$/, '').trim();
+  const a = t.indexOf('{');
+  if(a < 0){ hit('全部失败'); return null; }
+  t = t.slice(a, t.lastIndexOf('}') > a ? t.lastIndexOf('}') + 1 : undefined);
+  // 逐字符剥离字符串外的 // 与 /* */ 注释、智能引号，再去尾逗号
+  const stripComments = s => {
+    s = s.replace(/[""]/g, '"');
+    let out = '', inStr = false, esc = false;
+    for(let i = 0; i < s.length; i++){
+      const ch = s[i];
+      if(inStr){ out += ch; if(esc) esc = false; else if(ch === '\\') esc = true; else if(ch === '"') inStr = false; continue; }
+      if(ch === '"'){ inStr = true; out += ch; continue; }
+      if(ch === '/' && s[i+1] === '/'){ while(i < s.length && s[i] !== '\n') i++; continue; }
+      if(ch === '/' && s[i+1] === '*'){ i += 2; while(i < s.length && !(s[i] === '*' && s[i+1] === '/')) i++; i++; continue; }
+      out += ch;
+    }
+    return out.replace(/,(\s*[}\]])/g, '$1');   // 尾逗号
+  };
+  const balance = s => { // 截断修复：从尾部找截断点，配平括号并清理残逗号
+    const cuts = [s.length];
+    for(let i = s.length - 1; i >= 0 && cuts.length < 9; i--)
+      if(s[i] === ',' || s[i] === '}' || s[i] === ']' || s[i] === '"') cuts.push(i);
+    for(const p of cuts){
+      const cand = s.slice(0, p);
+      const stack = []; let inStr = false, esc = false, bad = false;
+      for(const ch of cand){
+        if(inStr){ if(esc) esc = false; else if(ch === '\\') esc = true; else if(ch === '"') inStr = false; continue; }
+        if(ch === '"') inStr = true;
+        else if(ch === '{' || ch === '[') stack.push(ch);
+        else if(ch === '}' || ch === ']'){ if(!stack.length){ bad = true; break; } stack.pop(); }
+      }
+      if(bad || inStr) continue;
+      if(stack.length){
+        var out = cand;
+        while(stack.length) out += stack.pop() === '{' ? '}' : ']';
+      } else out = cand;
+      out = out.replace(/,(\s*[}\]])/g, '$1');
+      try{ JSON.parse(out); return out; }catch{}
+    }
+    return s;
+  };
+  const s1 = stripComments(t), s2 = balance(s1);
+  for(const [name, cand] of [['标准 JSON.parse', t], ['剥离注释/尾逗号', s1], ['截断配平修复', s2]]){
+    try{ const o = JSON.parse(cand); if(o && typeof o === 'object'){ hit(name); return o; } }catch{}
+  }
+  hit('全部失败');
+  return null;
+}
+
+/* ---------- 结果渲染 ---------- */
+const p2d = new Plan2D($('#c2d'), PLAN_DEMO, {interactive:true});
+const p3d = new Plan3D($('#c3d'));
+let mode = '2d', curPlan = null;
+function render(plan){
+  curPlan = plan;
+  p2d.setPlan(plan);
+  $('#uploadView').classList.add('hide');
+  for(const id of ['tabs','rotWrap','btnJson','btnPng','btnNew','hint','jsonBox']) $('#'+id).classList.remove('hide');
+  $('#jsonPre').textContent = JSON.stringify(plan, null, 1);
+  $('#rotWrap').style.display = 'none';
+  switchMode('2d');
+}
+$('#tab2d').onclick = () => switchMode('2d');
+$('#tab3d').onclick = () => switchMode('3d');
+function switchMode(m){
+  mode = m;
+  $('#tab2d').classList.toggle('on', m==='2d');
+  $('#tab3d').classList.toggle('on', m==='3d');
+  $('#c2d').classList.toggle('hide', m!=='2d');
+  $('#c3d').classList.toggle('hide', m!=='3d');
+  $('#rotWrap').style.display = m==='3d' ? 'flex' : 'none';
+  $('#hint').textContent = m==='2d' ? '滚轮缩放 · 拖动平移 · 双击复位' : '左键旋转 · 右键/双指平移 · 滚轮缩放';
+  if(m==='3d'){
+    log('🧱 初始化 3D 场景（WebGL）…');
+    try{
+      p3d.setPlan(curPlan); p3d.resize();
+      log('✅ 3D 场景完成，自动旋转中（可滚轮缩放、右键平移）', 'ok');
+    }catch(err){
+      log('❌ 3D 初始化失败：' + err.message, 'err');
+      toast('3D 初始化失败：' + err.message); console.error(err);
+    }
+  } else p2d.fit();
+}
+$('#autorot').onchange = e => p3d.setAutoRotate(e.target.checked);
+$('#btnPng').onclick = () => {
+  if(mode==='2d'){ p2d.exportPNG(3200, 2400); toast('2D 设计图已导出（3200×2400）'); }
+  else if(p3d.inited && p3d.exportPNG()) toast('3D 视图已导出');
+  else toast('请先切换到 3D 标签');
+};
+$('#btnJson').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(curPlan, null, 2)], {type:'application/json'}));
+  a.download = (curPlan.title || 'plan') + '.json'; a.click();
+  toast('方案 JSON 已下载（可手改后重新导入）');
+};
+$('#btnNew').onclick = () => location.reload();
+addEventListener('resize', () => { p2d.draw(); p3d.resize(); });
+
+/* URL 哈希：#demo 直接载入示例 */
+if(location.hash === '#demo') render(PLAN_DEMO);
+</script>
+</body>
+</html>

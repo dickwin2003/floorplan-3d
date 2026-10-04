@@ -44,6 +44,35 @@ python3 -m http.server 8000
 
 > Three.js 通过 jsDelivr CDN 加载，首次打开 3D 场景需要联网。
 
+## AI 生成器：上传设计图 → 出 2D / 3D（app.html）
+
+`app.html` 是可交付的 Web 入口：**上传一张户型 / 平面设计图，AI 视觉模型解析为墙体、门窗、房间、家具数据，自动渲染 CAD 风格 2D 图纸与可交互的 3D 动态场景**，均可一键导出 PNG、下载方案 JSON（可手改后重新导入）。
+
+- 纯静态站点，可部署到任意静态托管（GitHub Pages / Vercel / nginx）
+- AI 接口在页面内配置（OpenAI 兼容格式，默认智谱 `glm-4.5v`，可换任意支持图片输入的模型），Key 仅存本机浏览器
+- 直连遇 CORS 时：`node server.js`（零依赖）同时提供静态托管与 `/api/proxy` 转发
+- 渲染引擎在 `plan-render.js`（`Plan2D` / `Plan3D` 两个类），示例数据在 `demo-plan.js`
+
+```bash
+python3 -m http.server 8000     # 或 node server.js（含 CORS 代理）
+# 访问 http://localhost:8000/app.html        上传入口
+# 访问 http://localhost:8000/app.html#demo   无 Key 直接看示例方案
+```
+
+## 示例：从设计图自动生成 2D / 3D（design.html）
+
+`design.html` 是内置示例：以 `doc/1.jpg`（超帅豪华汉雅包间平面设计图）为原型，把户型反向解析成数据后，**打开页面即自动生成同一方案的 2D 设计图与 3D 动态场景**：
+
+- 2D：CAD 风格平面图（墙体 / 门窗 / 家具 / 尺寸标注 / 图名），可滚轮缩放、拖动平移，一键导出 3200×2400 PNG
+- 3D：Three.js 场景，开场飞入 + 自动旋转（可开关），鼠标 / 触屏自由旋转缩放，可导出 PNG
+- Three.js 已本地化到 `lib/`，离线可用；`doc/` 内附带预生成的 2D / 3D 成品图
+
+```bash
+# 访问 http://localhost:8000/design.html        交互页面
+# 访问 http://localhost:8000/design.html#3d     直接进入 3D 动态
+# 访问 http://localhost:8000/design.html#full   整幅 2D 出图模式
+```
+
 ## 快捷键
 
 | 按键 | 作用 |

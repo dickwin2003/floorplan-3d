@@ -44,6 +44,36 @@ python3 -m http.server 8000
 
 > Three.js is loaded from the jsDelivr CDN, so an internet connection is required the first time you open the 3D scene.
 
+## AI generator: upload a plan, get 2D / 3D (app.html)
+
+`app.html` is the deliverable web entry: **upload a floor-plan image and an AI vision model parses it into walls, openings, rooms and furniture, then renders a CAD-style 2D drawing and an interactive 3D scene**. Both can be exported as PNG, and the plan can be downloaded as JSON (hand-editable and re-importable).
+
+- Pure static site — deployable to any static host (GitHub Pages / Vercel / nginx)
+- The AI endpoint is configured in the page (OpenAI-compatible; defaults to Zhipu `glm-4.5v`, any image-capable model works); the key never leaves the local browser
+- If direct calls hit CORS: `node server.js` (zero dependencies) serves the site plus an `/api/proxy` passthrough
+- Rendering engine lives in `plan-render.js` (`Plan2D` / `Plan3D` classes); sample data in `demo-plan.js`
+
+```bash
+python3 -m http.server 8000     # or: node server.js (with CORS proxy)
+# http://localhost:8000/app.html        upload entry
+# http://localhost:8000/app.html#demo   view the sample plan without a key
+```
+
+## Example: auto-generated 2D / 3D from a design drawing (design.html)
+
+`design.html` is a standalone demo modeled on `doc/1.jpg` (a private-dining-room floor plan). The plan was reverse-parsed into data, and **opening the page automatically generates both a 2D drawing and a 3D animated scene** of the same layout:
+
+- 2D: CAD-style plan (walls / openings / furniture / dimensions / title), zoom & pan with the wheel or drag, one-click export to 3200×2400 PNG
+- 3D: Three.js scene with a fly-in intro and toggleable auto-rotate, free orbit / zoom with mouse or touch, PNG export
+- Three.js is vendored into `lib/` so it works offline; pre-rendered 2D / 3D images are included in `doc/`
+
+```bash
+python3 -m http.server 8000
+# http://localhost:8000/design.html        interactive page
+# http://localhost:8000/design.html#3d     jump straight to the 3D scene
+# http://localhost:8000/design.html#full   full-bleed 2D drawing mode
+```
+
 ## Keyboard Shortcuts
 
 | Key | Action |

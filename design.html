@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>超帅豪华汉雅包间 · 2D/3D 设计图</title>
+<style>
+  :root{--ink:#33322e;--paper:#f5f1e8;--accent:#8a6d3b;--line:#d8d0c1;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#e9e4d8;color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--paper);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:17px;font-weight:600}
+  header .sub{font-size:12px;color:#8f887a}
+  .tabs{display:flex;gap:6px;margin-left:auto}
+  .tab{padding:7px 18px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-size:14px}
+  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn{padding:7px 14px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer;font-size:13px}
+  .btn:hover{border-color:var(--accent)}
+  label.tog{font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer}
+  main{flex:1;position:relative;min-height:0}
+  #c2d,#c3d{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+  #c2d{cursor:grab}
+  .hide{display:none!important}
+  #ref{position:absolute;right:14px;bottom:14px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 6px 24px rgba(0,0,0,.15);max-width:380px}
+  #ref img{width:100%;display:block;border-radius:4px}
+  #ref p{font-size:11px;color:#8f887a;padding-top:4px;text-align:center}
+  #toast{position:absolute;left:50%;top:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none}
+  #hint{position:absolute;left:14px;bottom:14px;font-size:12px;color:#8f887a;background:rgba(245,241,232,.9);padding:6px 12px;border-radius:8px;border:1px solid var(--line)}
+  body.full header, body.full #hint{display:none}
+</style>
+<script type="importmap">
+{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/addons/"}}
+</script>
+</head>
+<body>
+<header>
+  <h1>超帅豪华汉雅包间 · 2D / 3D 设计图</h1>
+  <span class="sub">由 doc/1.jpg 自动生成 · 单位 mm · 渲染引擎 plan-render.js</span>
+  <div class="tabs">
+    <button class="tab on" id="tab2d">2D 设计图</button>
+    <button class="tab" id="tab3d">3D 动态</button>
+  </div>
+  <label class="tog" id="rotWrap" style="display:none"><input type="checkbox" id="autorot" checked>自动旋转</label>
+  <button class="btn" id="btnRef">原图对照</button>
+  <button class="btn" id="btnPng">导出 PNG</button>
+  <a class="btn" href="app.html" style="text-decoration:none;color:inherit">上传图片生成 →</a>
+</header>
+<main>
+  <canvas id="c2d"></canvas>
+  <canvas id="c3d" class="hide"></canvas>
+  <div id="ref" class="hide"><img src="doc/1.jpg" alt="原始设计图"><p>原始设计图 doc/1.jpg</p></div>
+  <div id="hint">滚轮缩放 · 拖动平移 · 双击复位</div>
+  <div id="toast"></div>
+</main>
+
+<script type="module">
+import {Plan2D, Plan3D} from './plan-render.js';
+import {PLAN_DEMO as PLAN} from './demo-plan.js';
+
+/* ---------- 页面装配 ---------- */
+const $ = s => document.querySelector(s);
+const p2d = new Plan2D($('#c2d'), PLAN);
+const p3d = new Plan3D($('#c3d'));
+const toast = msg => { const t = $('#toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(t._h); t._h = setTimeout(()=>t.style.opacity=0, 2200); };
+
+let mode = '2d';
+$('#tab2d').onclick = () => switchMode('2d');
+$('#tab3d').onclick = () => switchMode('3d');
+function switchMode(m){
+  mode = m;
+  $('#tab2d').classList.toggle('on', m==='2d');
+  $('#tab3d').classList.toggle('on', m==='3d');
+  $('#c2d').classList.toggle('hide', m!=='2d');
+  $('#c3d').classList.toggle('hide', m!=='3d');
+  $('#rotWrap').style.display = m==='3d' ? 'flex' : 'none';
+  $('#hint').textContent = m==='2d' ? '滚轮缩放 · 拖动平移 · 双击复位' : '左键旋转 · 右键/双指平移 · 滚轮缩放';
+  if(m==='3d'){
+    try{ p3d.setPlan(PLAN); p3d.resize(); }catch(err){ toast('3D 初始化失败：' + err.message); console.error(err); }
+  } else p2d.fit();
+}
+$('#autorot').onchange = e => p3d.setAutoRotate(e.target.checked);
+$('#btnRef').onclick = () => $('#ref').classList.toggle('hide');
+$('#btnPng').onclick = () => {
+  if(mode==='2d'){ p2d.exportPNG(3200, 2400, '超帅豪华汉雅包间-2D设计图.png'); toast('2D 设计图已导出（3200×2400）'); }
+  else if(p3d.inited && p3d.exportPNG('超帅豪华汉雅包间-3D视图.png')) toast('3D 视图已导出');
+  else toast('请先切换到 3D 标签');
+};
+addEventListener('resize', () => { p2d.draw(); p3d.resize(); });
+
+/* 启动：打开页面即自动生成 2D；URL 哈希：#3d 直接进 3D，#full 整幅出图 */
+p2d.fit();
+if(location.hash === '#3d') switchMode('3d');
+if(location.hash === '#full'){ document.body.classList.add('full'); p2d.fit(); }
+</script>
+</body>
+</html>
